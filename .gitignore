@@ -1,0 +1,20 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Local editor settings
+.vs/
+.idea/
+*.user
+*.suo
+
+# macOS
+.DS_Store
+
+# Local secrets and databases
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
