@@ -1,6 +1,13 @@
+using B2BShop.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
 using B2BShop.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<ProductService>();
+builder.Services.AddDbContext<ShopDbContext>(options =>
+    options.UseSqlite(
+        builder.Configuration.GetConnectionString("ShopDatabase")));
+
 var app = builder.Build();
 
 app.MapGet("/", () => "Hello World!");
