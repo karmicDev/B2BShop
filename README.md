@@ -38,9 +38,19 @@ Open http://localhost:5080 in your browser, or visit http://localhost:5080/api/p
 
 The migration creates a local `shop.db` database with an empty `Products` table. On startup in Development, the application inserts three sample products if the table is empty. Existing products persist across restarts. Database files are excluded from Git; migrations and the local tool manifest are versioned.
 
+## Tests
+
+The solution includes the API and an xUnit test project. From the repository root, run:
+
+```bash
+dotnet test B2BShop.Api.Tests
+```
+
+The test project currently contains only an empty placeholder test in `CartTests.cs`; it does not yet verify API behavior.
+
 ## Next step
 
-Handle concurrent cart updates and add integration tests for cart behavior.
+Set up an isolated SQLite test database and replace the placeholder with a cart creation and retrieval integration test. Then test cart quantities and totals before handling concurrent updates.
 
 ## Known limitations
 
