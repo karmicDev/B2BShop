@@ -1,24 +1,24 @@
 # B2BShop
 
-Privates Lernprojekt: B2B-Shop mit ASP.NET-Core-API, später Blazor-Weboberfläche und Android-App.
+A personal learning project: a B2B shop with an ASP.NET Core API, with a Blazor web frontend and an Android app planned for later.
 
-## Aktueller Stand
+## Current status
 
-- ASP.NET Core mit .NET 10
-- `GET /` liefert `Hello World!`
-- Lokal gestartet und im Browser geprüft
+- ASP.NET Core targeting .NET 10
+- `GET /` returns `Hello World!`
+- Run locally and verified in the browser
 
-## Starten
+## Getting started
 
-Voraussetzung: .NET 10 SDK.
+Prerequisite: .NET 10 SDK.
 
 ```bash
 cd B2BShop.Api
 dotnet run --urls http://localhost:5080
 ```
 
-Anschließend http://localhost:5080 öffnen. Mit Ctrl+C stoppen.
+Open http://localhost:5080 in your browser. Press Ctrl+C to stop the server.
 
-## Nächster Lernschritt
+## Next step
 
-Produkt-Endpunkt `GET /api/products` mit Beispieldaten ergänzen.
+Add a `GET /api/products` endpoint with sample data.
