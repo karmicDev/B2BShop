@@ -11,7 +11,11 @@ A personal learning project: a B2B shop with an ASP.NET Core API, with a Blazor 
 - ProductService, CartService, and ShopDbContext use scoped lifetimes through dependency injection
 - EF Core with SQLite and migrations for Products, Carts, and CartItems
 - `POST /api/carts` creates a persisted empty cart and returns HTTP 201 with its ID
-- `GET /api/carts/{id}` returns the cart ID, or HTTP 404 for an unknown cart
+- `GET /api/carts/{id}` returns cart items and calculated totals, or HTTP 404 for an unknown cart
+- `PUT /api/carts/{cartId}/items/{productId}` sets a product quantity between 1 and 99
+- Setting the same quantity again leaves the quantity unchanged
+- Prices are read from the product catalog; clients submit only quantities
+- Invalid quantities return HTTP 400; unknown carts or products return HTTP 404
 - Cart responses use a DTO rather than exposing database entities
 - A unique index prevents duplicate product rows within a cart
 - Product endpoints read persisted data from SQLite through EF Core
@@ -36,4 +40,8 @@ The migration creates a local `shop.db` database with an empty `Products` table.
 
 ## Next step
 
-Add products to a cart with quantity validation and server-side pricing, then include cart items and totals in the response.
+Handle concurrent cart updates and add integration tests for cart behavior.
+
+## Known limitations
+
+Concurrent inserts of the same product into a cart may currently cause a database constraint error. Cart ownership and authentication are not implemented yet.

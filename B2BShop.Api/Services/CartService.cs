@@ -23,10 +23,68 @@ public class CartService
 
     public async Task<CartResponse?> GetByIdAsync(Guid id)
     {
-        return await _dbContext.Carts
+        var cart = await _dbContext.Carts
             .AsNoTracking()
-            .Where(cart => cart.Id == id)
-            .Select(cart => new CartResponse(cart.Id))
-            .FirstOrDefaultAsync();
+            .Include(cart => cart.Items)
+            .ThenInclude(item => item.Product)
+            .FirstOrDefaultAsync(cart => cart.Id == id);
+
+        if (cart is null)
+        {
+            return null;
+        }
+
+        var items = cart.Items
+            .OrderBy(item => item.ProductId)
+            .Select(item => new CartItemResponse(
+                item.ProductId,
+                item.Product.Name,
+                item.Quantity,
+                item.Product.PriceInCents))
+            .ToList();
+
+        return new CartResponse(cart.Id, items);
+    }
+
+    public async Task<SetCartItemResult> SetItemAsync(
+        Guid cartId,
+        int productId,
+        int quantity)
+    {
+        if (quantity < 1 || quantity > 99)
+        {
+            return SetCartItemResult.InvalidQuantity;
+        }
+
+        if (!await _dbContext.Carts.AnyAsync(cart => cart.Id == cartId))
+        {
+            return SetCartItemResult.CartNotFound;
+        }
+
+        if (!await _dbContext.Products.AnyAsync(product => product.Id == productId))
+        {
+            return SetCartItemResult.ProductNotFound;
+        }
+
+        var item = await _dbContext.CartItems
+            .FirstOrDefaultAsync(item =>
+                item.CartId == cartId && item.ProductId == productId);
+
+        if (item is null)
+        {
+            item = new CartItem
+            {
+                CartId = cartId,
+                ProductId = productId,
+                Quantity = quantity
+            };
+            _dbContext.CartItems.Add(item);
+        }
+        else
+        {
+            item.Quantity = quantity;
+        }
+        await _dbContext.SaveChangesAsync();
+        return SetCartItemResult.Success;
     }
 }

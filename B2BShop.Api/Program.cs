@@ -1,5 +1,6 @@
 using B2BShop.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using B2BShop.Api.Contracts;
 
 using B2BShop.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
@@ -53,5 +54,28 @@ app.MapPost("/api/carts", async (CartService service) =>
         $"/api/carts/{cartId}",
         new { id = cartId });
 });
+
+app.MapPut("/api/carts/{cartId:guid}/items/{productId:int}",
+    async (
+        Guid cartId,
+        int productId,
+        SetCartItemRequest request,
+        CartService service) =>
+    {
+        var result = await service.SetItemAsync(
+            cartId, productId, request.Quantity);
+
+        return result switch
+        {
+            SetCartItemResult.Success => Results.NoContent(),
+            SetCartItemResult.InvalidQuantity =>
+                Results.BadRequest(new { error = "Quantity must be between 1 and 99." }),
+            SetCartItemResult.CartNotFound =>
+                Results.NotFound(new { error = "Cart not found." }),
+            SetCartItemResult.ProductNotFound =>
+                Results.NotFound(new { error = "Product not found." }),
+            _ => Results.StatusCode(500)
+        };
+    });
 
 app.Run();
