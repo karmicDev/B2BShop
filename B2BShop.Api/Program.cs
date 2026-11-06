@@ -1,19 +1,15 @@
+using B2BShop.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<ProductService>();
 var app = builder.Build();
-Product[] products =
-[
-    new Product(1, "Mineral Water", 99),
-    new Product(2, "Apple Juice", 249),
-    new Product(3, "Coffee Beans", 1299)
-];
 
 app.MapGet("/", () => "Hello World!");
 
-app.MapGet("/api/products", () => products);
+app.MapGet("/api/products", (ProductService service) => service.GetAll());
 
-app.MapGet("/api/products/{id:int}", (int id) =>
+app.MapGet("/api/products/{id:int}", (int id, ProductService service) =>
 {
-    var product = products.FirstOrDefault(p => p.Id == id);
+    var product = service.GetById(id);
     if (product is null)
     {
         return Results.NotFound();
@@ -22,5 +18,3 @@ app.MapGet("/api/products/{id:int}", (int id) =>
 });
 
 app.Run();
-
-public record Product(int Id, string Name, int PriceInCents);
