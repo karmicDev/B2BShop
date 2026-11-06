@@ -10,4 +10,21 @@ public class ShopDbContext : DbContext
     }
 
     public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<Cart> Carts => Set<Cart>();
+
+    public DbSet<CartItem> CartItems => Set<CartItem>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<CartItem>()
+            .HasIndex(item => new { item.CartId, item.ProductId })
+            .IsUnique();
+        modelBuilder.Entity<CartItem>()
+            .HasOne(item => item.Product)
+            .WithMany()
+            .HasForeignKey(item => item.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
 }
