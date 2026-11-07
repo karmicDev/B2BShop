@@ -46,11 +46,13 @@ The solution includes the API and an xUnit test project. From the repository roo
 dotnet test B2BShop.Api.Tests
 ```
 
-The test project currently contains only an empty placeholder test in `CartTests.cs`; it does not yet verify API behavior.
+The cart integration test creates a cart through HTTP, follows the Location header, and verifies that the retrieved cart has a valid ID, no items, and a zero total.
+
+Tests use WebApplicationFactory in the Testing environment with an isolated in-memory SQLite database. Migrations create the test schema; the local shop.db database is not used.
 
 ## Next step
 
-Set up an isolated SQLite test database and replace the placeholder with a cart creation and retrieval integration test. Then test cart quantities and totals before handling concurrent updates.
+Add integration tests for cart quantities, totals, and invalid requests before handling concurrent updates.
 
 ## Known limitations
 
