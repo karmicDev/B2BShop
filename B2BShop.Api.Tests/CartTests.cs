@@ -404,4 +404,75 @@ public class CartTests
         Assert.Equal(249L, item.TotalPriceInCents);
         Assert.Equal(249L, cart.TotalPriceInCents);
     }
+    
+    [Fact]
+    public async Task RemoveCartItem_RemovesEntireQuantityAndPreservesOtherItems()
+    {
+        // Arrange
+        using var factory = new ShopApiFactory();
+        using var client = factory.CreateClient();
+    
+        await factory.InitializeDatabaseAsync(
+            new Product(2, "Apple Juice", 249), 
+            new Product(3, "Coffee Beans", 1299));
+    
+        using var createResponse =
+            await client.PostAsync("/api/carts", null);
+    
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+    
+        var location = createResponse.Headers.Location;
+        Assert.NotNull(location);
+    
+        var itemUrl = $"{location}/items/2";
+    
+        using var juiceResponse = await client.PutAsJsonAsync(
+            itemUrl, new SetCartItemRequest(10));
+    
+        using var coffeeResponse = await client.PutAsJsonAsync(
+            $"{location}/items/3", new SetCartItemRequest(2));
+    
+        Assert.Equal(HttpStatusCode.NoContent, juiceResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, coffeeResponse.StatusCode);
+    
+        // Act
+        using var deleteResponse = await client.DeleteAsync(itemUrl);
+    
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+    
+        using var getResponse = await client.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+    
+        var cart = await getResponse.Content
+            .ReadFromJsonAsync<CartResponse>();
+    
+        Assert.NotNull(cart);
+    
+        var remainingItem = Assert.Single(cart.Items);
+    
+        Assert.Equal(3, remainingItem.ProductId);
+        Assert.Equal(2, remainingItem.Quantity);
+        Assert.Equal(2598L, remainingItem.TotalPriceInCents);
+        Assert.Equal(2598L, cart.TotalPriceInCents);
+    
+        // Repeating DELETE must also succeed.
+        using var repeatResponse = await client.DeleteAsync(itemUrl);
+    
+        Assert.Equal(HttpStatusCode.NoContent, repeatResponse.StatusCode);
+    
+        using var repeatGetResponse = await client.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, repeatGetResponse.StatusCode);
+    
+        var unchangedCart = await repeatGetResponse.Content
+            .ReadFromJsonAsync<CartResponse>();
+    
+        Assert.NotNull(unchangedCart);
+    
+        var unchangedItem = Assert.Single(unchangedCart.Items);
+    
+        Assert.Equal(3, unchangedItem.ProductId);
+        Assert.Equal(2, unchangedItem.Quantity);
+        Assert.Equal(2598L, unchangedCart.TotalPriceInCents);
+    }
 }

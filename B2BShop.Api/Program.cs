@@ -148,4 +148,29 @@ app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/decrement",
         };
     });
 
+app.MapDelete("/api/carts/{cartId:guid}/items/{productId:int}",
+    async (
+        Guid cartId,
+        int productId,
+        CartService service) =>
+    {
+        var result = await service.RemoveItemAsync(cartId, productId);
+
+        return result switch
+        {
+            SetCartItemResult.Success => Results.NoContent(),
+
+            SetCartItemResult.CartNotFound => Results.NotFound(new { error = "Cart not found." }),
+
+            SetCartItemResult.ProductNotFound => Results.NotFound(new { error = "Product not found." }),
+
+            SetCartItemResult.Conflict => Results.Conflict(new
+            {
+                error = "The cart is busy. Please retry the request."
+            }),
+
+            _ => Results.StatusCode(500)
+        };
+    });
+
 app.Run();

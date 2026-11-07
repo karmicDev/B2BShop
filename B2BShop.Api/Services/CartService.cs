@@ -79,6 +79,17 @@ public class CartService
             removeWhenEmpty: true);
     }
 
+    public Task<SetCartItemResult> RemoveItemAsync(
+        Guid cartId,
+        int productId)
+    {
+        return ChangeQuantityAsync(
+            cartId,
+            productId,
+            _ => 0,
+            removeWhenEmpty: true);
+    }
+
     private async Task<SetCartItemResult> ChangeQuantityAsync(
         Guid  cartId,
         int productId,
