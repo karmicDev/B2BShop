@@ -46,14 +46,26 @@ The solution includes the API and an xUnit test project. From the repository roo
 dotnet test B2BShop.Api.Tests
 ```
 
-The cart integration test creates a cart through HTTP, follows the Location header, and verifies that the retrieved cart has a valid ID, no items, and a zero total.
+Seven integration test cases cover:
 
-Tests use WebApplicationFactory in the Testing environment with an isolated in-memory SQLite database. Migrations create the test schema; the local shop.db database is not used.
+- Creating and retrieving an empty cart
+- Repeated quantity-setting requests, a single cart item, and calculated totals
+- Invalid quantities (-1, 0, and 100) without changing the cart
+- Unknown carts and products returning HTTP 404
+
+Tests use WebApplicationFactory in the Testing environment with a unique temporary SQLite file per factory and separate connections per context. Migrations create the test schema; the local shop.db database is not used. Test database files are removed when the factory is disposed.
 
 ## Next step
 
-Add integration tests for cart quantities, totals, and invalid requests before handling concurrent updates.
+1. Restore the concurrent first-insert regression test and fix duplicate-insert conflicts using EF Core operations.
+2. Add an atomic increment operation: ten successful increment requests must produce one cart item with quantity ten.
+3. Add item removal, checkout with stored order prices, and a Blazor frontend.
+4. Later, add customer ownership/authentication, SQL Server support, and an Android client.
 
 ## Known limitations
 
-Concurrent inserts of the same product into a cart may currently cause a database constraint error. Cart ownership and authentication are not implemented yet.
+Concurrent first inserts of the same product into a cart can cause a UNIQUE constraint error. This was reproduced during testing and is not fixed yet; the concurrent regression test is currently absent from the test suite.
+
+PUT sets an absolute quantity; it does not increment it. A plus-button increment operation is not implemented yet. Concurrent absolute quantity updates currently use last-write-wins behavior.
+
+Cart ownership, authentication, item removal, checkout, and the web frontend are not implemented yet.
