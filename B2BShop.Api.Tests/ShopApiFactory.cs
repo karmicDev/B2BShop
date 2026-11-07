@@ -1,4 +1,5 @@
 using B2BShop.Api.Data;
+using B2BShop.Api.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -42,5 +43,18 @@ public class ShopApiFactory : WebApplicationFactory<Program>
             File.Delete($"{_databasePath}-shm");
             File.Delete($"{_databasePath}-journal");
         }
+    }
+    
+    public async Task InitializeDatabaseAsync(params Product[] products)
+    {
+        using var scope = Services.CreateScope();
+
+        var context = scope.ServiceProvider
+            .GetRequiredService<ShopDbContext>();
+
+        await context.Database.MigrateAsync();
+
+        context.Products.AddRange(products);
+        await context.SaveChangesAsync();
     }
 }

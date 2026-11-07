@@ -19,12 +19,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
-            await context.Database.MigrateAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
         // Act
         using var createResponse =  await client.PostAsync("api/carts", null);
@@ -54,15 +49,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-        
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
-            await context.Database.MigrateAsync();
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
-        
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         using var createResponse = await client.PostAsync("api/carts", null);
         
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
@@ -104,13 +91,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
-            await context.Database.MigrateAsync();
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         using var createResponse = await client.PostAsync("api/carts", null);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         
@@ -141,17 +122,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider
-                .GetRequiredService<ShopDbContext>();
-
-            await context.Database.MigrateAsync();
-
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
         // Act
         var unknownCartId = Guid.NewGuid();
@@ -175,13 +146,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
-            await context.Database.MigrateAsync();
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         
         // Act
         using var createResponse = await client.PostAsync("api/carts", null);
@@ -217,17 +182,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider
-                .GetRequiredService<ShopDbContext>();
-
-            await context.Database.MigrateAsync();
-
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -280,17 +235,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider
-                .GetRequiredService<ShopDbContext>();
-
-            await context.Database.MigrateAsync();
-
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -348,17 +293,7 @@ public class CartTests
         // Arrange
         using var factory = new ShopApiFactory();
         using var client = factory.CreateClient();
-    
-        using (var scope = factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider
-                .GetRequiredService<ShopDbContext>();
-    
-            await context.Database.MigrateAsync();
-    
-            context.Products.Add(new Product(2, "Apple Juice", 249));
-            await context.SaveChangesAsync();
-        }
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
     
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -411,5 +346,62 @@ public class CartTests
             Assert.Equal(expectedQuantity * 249L, item.TotalPriceInCents);
             Assert.Equal(expectedQuantity * 249L, cart.TotalPriceInCents);
         }
+    }
+    
+    [Fact]
+    public async Task DecrementCartItem_TenConcurrentRequestsReduceQuantityFromElevenToOne()
+    {
+        // Arrange
+        using var factory = new ShopApiFactory();
+        using var client = factory.CreateClient();
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+
+        using var createResponse =
+            await client.PostAsync("/api/carts", null);
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var location = createResponse.Headers.Location;
+        Assert.NotNull(location);
+
+        var itemUrl = $"{location}/items/2";
+
+        using var setResponse = await client.PutAsJsonAsync(
+            itemUrl, new SetCartItemRequest(11));
+
+        Assert.Equal(HttpStatusCode.NoContent, setResponse.StatusCode);
+
+        // Act
+        var requests = Enumerable.Range(0, 10)
+            .Select(async _ =>
+            {
+                using var response =
+                    await client.PostAsync($"{itemUrl}/decrement", null);
+
+                return response.StatusCode;
+            })
+            .ToArray();
+
+        var statusCodes = await Task.WhenAll(requests);
+
+        // Assert
+        Assert.All(statusCodes, statusCode =>
+            Assert.Equal(HttpStatusCode.NoContent, statusCode));
+
+        using var getResponse = await client.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var cart = await getResponse.Content
+            .ReadFromJsonAsync<CartResponse>();
+
+        Assert.NotNull(cart);
+
+        var item = Assert.Single(cart.Items);
+
+        Assert.Equal(2, item.ProductId);
+        Assert.Equal(1, item.Quantity);
+        Assert.Equal(249, item.UnitPriceInCents);
+        Assert.Equal(249L, item.TotalPriceInCents);
+        Assert.Equal(249L, cart.TotalPriceInCents);
     }
 }
