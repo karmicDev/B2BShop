@@ -2,6 +2,7 @@ using B2BShop.Api.Data;
 using B2BShop.Api.Models;
 using B2BShop.Api.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 namespace B2BShop.Api.Services;
 
 public class CartService
@@ -70,21 +71,46 @@ public class CartService
             .FirstOrDefaultAsync(item =>
                 item.CartId == cartId && item.ProductId == productId);
 
-        if (item is null)
-        {
-            item = new CartItem
-            {
-                CartId = cartId,
-                ProductId = productId,
-                Quantity = quantity
-            };
-            _dbContext.CartItems.Add(item);
-        }
-        else
+        if (item is not null)
         {
             item.Quantity = quantity;
+            await _dbContext.SaveChangesAsync();
+
+            return SetCartItemResult.Success;
         }
-        await _dbContext.SaveChangesAsync();
+
+        var newItem = new CartItem
+        {
+            CartId = cartId,
+            ProductId = productId,
+            Quantity = quantity
+        };
+
+        _dbContext.CartItems.Add(newItem);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is SqliteException
+                      { SqliteExtendedErrorCode: 2067 })
+        {
+            _dbContext.Entry(newItem).State = EntityState.Detached;
+
+            var existingItem = await _dbContext.CartItems
+                .SingleOrDefaultAsync(i =>
+                    i.CartId == cartId && i.ProductId == productId);
+
+            if (existingItem is null)
+            {
+                throw;
+            }
+
+            existingItem.Quantity = quantity;
+            await _dbContext.SaveChangesAsync();
+        }
+
         return SetCartItemResult.Success;
     }
 }
