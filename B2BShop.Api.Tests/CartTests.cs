@@ -273,4 +273,143 @@ public class CartTests
         Assert.Equal(498L, item.TotalPriceInCents);
         Assert.Equal(498L, cart.TotalPriceInCents);
     }
+
+    [Fact]
+    public async Task IncrementCartItem_TenConcurrentRequestsProduceQuantityTen()
+    {
+        // Arrange
+        using var factory = new ShopApiFactory();
+        using var client = factory.CreateClient();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider
+                .GetRequiredService<ShopDbContext>();
+
+            await context.Database.MigrateAsync();
+
+            context.Products.Add(new Product(2, "Apple Juice", 249));
+            await context.SaveChangesAsync();
+        }
+
+        using var createResponse =
+            await client.PostAsync("/api/carts", null);
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var location = createResponse.Headers.Location;
+        Assert.NotNull(location);
+
+        var incrementUrl = $"{location}/items/2/increment";
+
+        // Act
+        var requests = Enumerable.Range(0, 10)
+            .Select(async _ =>
+            {
+                using var response =
+                    await client.PostAsync(incrementUrl, null);
+
+                return response.StatusCode;
+            })
+            .ToArray();
+
+        var statusCodes = await Task.WhenAll(requests);
+
+        // Assert
+        Assert.All(statusCodes, statusCode =>
+            Assert.Equal(HttpStatusCode.NoContent, statusCode));
+
+        using var getResponse = await client.GetAsync(location);
+
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var cart = await getResponse.Content
+            .ReadFromJsonAsync<CartResponse>();
+
+        Assert.NotNull(cart);
+
+        var item = Assert.Single(cart.Items);
+
+        Assert.Equal(2, item.ProductId);
+        Assert.Equal(10, item.Quantity);
+        Assert.Equal(249, item.UnitPriceInCents);
+        Assert.Equal(2490L, item.TotalPriceInCents);
+        Assert.Equal(2490L, cart.TotalPriceInCents);
+    }
+    
+    [Theory]
+    [InlineData(3, 2)]
+    [InlineData(1, 0)]
+    [InlineData(0, 0)]
+    public async Task DecrementCartItem_ReducesQuantityOrRemovesItem(
+        int initialQuantity, 
+        int expectedQuantity) 
+    {
+        // Arrange
+        using var factory = new ShopApiFactory();
+        using var client = factory.CreateClient();
+    
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider
+                .GetRequiredService<ShopDbContext>();
+    
+            await context.Database.MigrateAsync();
+    
+            context.Products.Add(new Product(2, "Apple Juice", 249));
+            await context.SaveChangesAsync();
+        }
+    
+        using var createResponse =
+            await client.PostAsync("/api/carts", null);
+    
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+    
+        var location = createResponse.Headers.Location;
+        Assert.NotNull(location);
+    
+        var itemUrl = $"{location}/items/2";
+    
+        if (initialQuantity > 0)
+        {
+            using var setResponse = await client.PutAsJsonAsync(
+                itemUrl, new SetCartItemRequest(initialQuantity));
+    
+            Assert.Equal(HttpStatusCode.NoContent, setResponse.StatusCode);
+        }
+    
+        // Act
+        using var decrementResponse =
+            await client.PostAsync($"{itemUrl}/decrement", null);
+    
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            decrementResponse.StatusCode);
+    
+        using var getResponse = await client.GetAsync(location);
+    
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+    
+        var cart = await getResponse.Content
+            .ReadFromJsonAsync<CartResponse>();
+    
+        Assert.NotNull(cart);
+    
+        if (expectedQuantity == 0)
+        {
+            Assert.Empty(cart.Items);
+            Assert.Equal(0L, cart.TotalPriceInCents);
+        }
+        else
+        {
+            var item = Assert.Single(cart.Items);
+    
+            Assert.Equal(2, item.ProductId);
+            Assert.Equal(expectedQuantity, item.Quantity);
+            Assert.Equal(249, item.UnitPriceInCents);
+            Assert.Equal(expectedQuantity * 249L, item.TotalPriceInCents);
+            Assert.Equal(expectedQuantity * 249L, cart.TotalPriceInCents);
+        }
+    }
 }

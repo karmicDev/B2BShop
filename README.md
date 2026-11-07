@@ -14,6 +14,10 @@ A personal learning project: a B2B shop with an ASP.NET Core API, with a Blazor 
 - `GET /api/carts/{id}` returns cart items and calculated totals, or HTTP 404 for an unknown cart
 - `PUT /api/carts/{cartId}/items/{productId}` sets a product quantity between 1 and 99
 - Setting the same quantity again leaves the quantity unchanged
+- `POST /api/carts/{cartId}/items/{productId}/increment` increases the quantity by one, creating a missing item with quantity one
+- `POST /api/carts/{cartId}/items/{productId}/decrement` decreases the quantity by one and removes the item when its quantity reaches zero
+- Decrementing an absent item succeeds without changing the cart, provided the cart and product exist
+- EF Core quantity concurrency checks and bounded retries handle concurrent updates and first-insert conflicts; exhausted retries return HTTP 409
 - Prices are read from the product catalog; clients submit only quantities
 - Invalid quantities return HTTP 400; unknown carts or products return HTTP 404
 - Cart responses use a DTO rather than exposing database entities
@@ -46,26 +50,33 @@ The solution includes the API and an xUnit test project. From the repository roo
 dotnet test B2BShop.Api.Tests
 ```
 
-Seven integration test cases cover:
+Twelve integration test cases cover:
 
 - Creating and retrieving an empty cart
 - Repeated quantity-setting requests, a single cart item, and calculated totals
 - Invalid quantities (-1, 0, and 100) without changing the cart
 - Unknown carts and products returning HTTP 404
+- Concurrent quantity-setting requests leaving one item with the requested quantity
+- Ten concurrent increments producing one item with quantity ten
+- Decrementing quantity three to two, removing quantity one, and decrementing an absent item
 
 Tests use WebApplicationFactory in the Testing environment with a unique temporary SQLite file per factory and separate connections per context. Migrations create the test schema; the local shop.db database is not used. Test database files are removed when the factory is disposed.
 
-## Next step
+## Next steps
 
-1. Restore the concurrent first-insert regression test and fix duplicate-insert conflicts using EF Core operations.
-2. Add an atomic increment operation: ten successful increment requests must produce one cart item with quantity ten.
-3. Add item removal, checkout with stored order prices, and a Blazor frontend.
+1. Test concurrent decrements and increment/decrement quantity boundaries.
+2. Add a dedicated endpoint for removing an entire cart item.
+3. Add checkout with stored order prices and a Blazor frontend.
 4. Later, add customer ownership/authentication, SQL Server support, and an Android client.
 
 ## Known limitations
 
-Concurrent first inserts of the same product into a cart can cause a UNIQUE constraint error. This was reproduced during testing and is not fixed yet; the concurrent regression test is currently absent from the test suite.
+Concurrency tests start overlapping HTTP requests but do not deterministically force every conflict path. Parallel decrement behavior and mixed increment/decrement operations still need dedicated tests.
 
-PUT sets an absolute quantity; it does not increment it. A plus-button increment operation is not implemented yet. Concurrent absolute quantity updates currently use last-write-wins behavior.
+Quantity changes retry recognized insert and optimistic concurrency conflicts up to 20 times. Under sustained contention, requests may return HTTP 409. Other database failures are not handled by this retry loop.
 
-Cart ownership, authentication, item removal, checkout, and the web frontend are not implemented yet.
+PUT sets an absolute quantity; increment and decrement apply relative changes. Automatically repeating an increment or decrement HTTP request after an uncertain network outcome can apply the action twice; request deduplication is not implemented.
+
+Quantity is used as the concurrency token. It protects changes against a different current quantity, but does not detect an intervening change that returns to the same quantity. Concurrent deletion of carts or products is not specifically handled.
+
+Cart ownership, authentication, a dedicated item-removal endpoint, checkout, and the web frontend are not implemented yet. SQLite-specific unique-constraint detection must be adapted when adding SQL Server support.

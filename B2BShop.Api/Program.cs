@@ -74,6 +74,76 @@ app.MapPut("/api/carts/{cartId:guid}/items/{productId:int}",
                 Results.NotFound(new { error = "Cart not found." }),
             SetCartItemResult.ProductNotFound =>
                 Results.NotFound(new { error = "Product not found." }),
+            SetCartItemResult.Conflict =>
+                Results.Conflict(new { error = "The cart is busy. Please retry the request." }),
+            _ => Results.StatusCode(500)
+        };
+    });
+
+app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/increment",
+    async (
+        Guid cartId,
+        int productId,
+        CartService cartService) =>
+    {
+        var result = await cartService.IncrementItemAsync(cartId, productId);
+        return result switch
+        {
+            SetCartItemResult.Success =>
+                Results.NoContent(),
+
+            SetCartItemResult.InvalidQuantity =>
+                Results.BadRequest(new
+                {
+                    error = "Quantity must be between 1 and 99."
+                }),
+
+            SetCartItemResult.CartNotFound =>
+                Results.NotFound(new { error = "Cart not found." }),
+
+            SetCartItemResult.ProductNotFound =>
+                Results.NotFound(new { error = "Product not found." }),
+
+            SetCartItemResult.Conflict =>
+                Results.Conflict(new
+                {
+                    error = "The cart is busy. Please retry the request."
+                }),
+
+            _ => Results.StatusCode(500)
+        };
+    });
+
+app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/decrement",
+    async (
+        Guid cartId,
+        int productId,
+        CartService cartService) =>
+    {
+        var result = await cartService.DecrementItemAsync(cartId, productId);
+        return result switch
+        {
+            SetCartItemResult.Success =>
+                Results.NoContent(),
+
+            SetCartItemResult.InvalidQuantity =>
+                Results.BadRequest(new
+                {
+                    error = "Quantity must be between 1 and 99."
+                }),
+
+            SetCartItemResult.CartNotFound =>
+                Results.NotFound(new { error = "Cart not found." }),
+
+            SetCartItemResult.ProductNotFound =>
+                Results.NotFound(new { error = "Product not found." }),
+
+            SetCartItemResult.Conflict =>
+                Results.Conflict(new
+                {
+                    error = "The cart is busy. Please retry the request."
+                }),
+
             _ => Results.StatusCode(500)
         };
     });

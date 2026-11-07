@@ -47,16 +47,44 @@ public class CartService
         return new CartResponse(cart.Id, items);
     }
 
-    public async Task<SetCartItemResult> SetItemAsync(
+    public Task<SetCartItemResult> SetItemAsync(
         Guid cartId,
         int productId,
         int quantity)
     {
         if (quantity < 1 || quantity > 99)
         {
-            return SetCartItemResult.InvalidQuantity;
+            return Task.FromResult(SetCartItemResult.InvalidQuantity);
         }
 
+        return ChangeQuantityAsync(cartId, productId, _ => quantity);
+    }
+
+    public Task<SetCartItemResult> IncrementItemAsync(
+        Guid cartId,
+        int productId)
+    {
+        return ChangeQuantityAsync(
+            cartId, productId, currentQuantity => currentQuantity + 1);
+    }
+
+    public Task<SetCartItemResult> DecrementItemAsync(
+        Guid cartId,
+        int productId)
+    {
+        return ChangeQuantityAsync(
+            cartId, 
+            productId, 
+            currentQuantity => currentQuantity - 1,
+            removeWhenEmpty: true);
+    }
+
+    private async Task<SetCartItemResult> ChangeQuantityAsync(
+        Guid  cartId,
+        int productId,
+        Func<int, int> calculateQuantity,
+        bool removeWhenEmpty = false)
+    {
         if (!await _dbContext.Carts.AnyAsync(cart => cart.Id == cartId))
         {
             return SetCartItemResult.CartNotFound;
@@ -66,51 +94,71 @@ public class CartService
         {
             return SetCartItemResult.ProductNotFound;
         }
+        
+        const int maxAttempts = 20;
 
-        var item = await _dbContext.CartItems
-            .FirstOrDefaultAsync(item =>
-                item.CartId == cartId && item.ProductId == productId);
-
-        if (item is not null)
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            item.Quantity = quantity;
-            await _dbContext.SaveChangesAsync();
-
-            return SetCartItemResult.Success;
-        }
-
-        var newItem = new CartItem
-        {
-            CartId = cartId,
-            ProductId = productId,
-            Quantity = quantity
-        };
-
-        _dbContext.CartItems.Add(newItem);
-
-        try
-        {
-            await _dbContext.SaveChangesAsync();
-        }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is SqliteException
-                      { SqliteExtendedErrorCode: 2067 })
-        {
-            _dbContext.Entry(newItem).State = EntityState.Detached;
-
-            var existingItem = await _dbContext.CartItems
-                .SingleOrDefaultAsync(i =>
-                    i.CartId == cartId && i.ProductId == productId);
-
-            if (existingItem is null)
+            var item = await _dbContext.CartItems.SingleOrDefaultAsync(
+                item => item.CartId == cartId && item.ProductId == productId);
+            var isNew = item is null;
+            
+            if (item is null && removeWhenEmpty)
             {
-                throw;
+                return SetCartItemResult.Success;
+            }
+            
+            var quantity = calculateQuantity(item?.Quantity ?? 0);
+            
+            if (removeWhenEmpty && quantity == 0)
+            {
+                _dbContext.CartItems.Remove(item!);
+            }
+            else
+            {
+                if (quantity < 1 || quantity > 99)
+                {
+                    return SetCartItemResult.InvalidQuantity;
+                }
+
+                if (item is null)
+                {
+                    item = new CartItem
+                    {
+                        CartId = cartId,
+                        ProductId = productId,
+                        Quantity = quantity
+                    };
+                    _dbContext.CartItems.Add(item);
+                }
+                else
+                {
+                    item.Quantity = quantity;
+                }
+
             }
 
-            existingItem.Quantity = quantity;
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+                return SetCartItemResult.Success;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                _dbContext.Entry(item!).State = EntityState.Detached;
+            }
+            catch (DbUpdateException exception)
+                when (isNew &&
+                      exception.InnerException is SqliteException
+                          { SqliteExtendedErrorCode: 2067 })
+            {
+                _dbContext.Entry(item!).State = EntityState.Detached;
+            }
+            if (attempt < maxAttempts - 1)
+            {
+                await Task.Delay(Random.Shared.Next(5, 25));
+            }
         }
-
-        return SetCartItemResult.Success;
+        return SetCartItemResult.Conflict;
     }
 }

@@ -26,5 +26,8 @@ public class ShopDbContext : DbContext
             .WithMany()
             .HasForeignKey(item => item.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<CartItem>()
+            .Property(item => item.Quantity)
+            .IsConcurrencyToken();
     }
 }

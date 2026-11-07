@@ -5,5 +5,6 @@ public enum SetCartItemResult
     Success,
     InvalidQuantity,
     CartNotFound,
-    ProductNotFound
+    ProductNotFound,
+    Conflict
 }
