@@ -17,7 +17,8 @@ public class CartTests
     public async Task CreateCart_CanBeRetrievedAsEmptyCart()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
@@ -47,7 +48,8 @@ public class CartTests
     public async Task SetCartItem_RepeatedRequestKeepsQuantityAndTotal()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         using var createResponse = await client.PostAsync("api/carts", null);
@@ -89,7 +91,8 @@ public class CartTests
     public async Task SetCartItem_InvalidQuantityReturnsBadRequest(int quantity)
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         using var createResponse = await client.PostAsync("api/carts", null);
@@ -120,7 +123,8 @@ public class CartTests
     public async Task SetCartItem_UnknownCartReturnsNotFound()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
@@ -144,7 +148,8 @@ public class CartTests
     public async Task SetCartItem_UnknownProductReturnsNotFound()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
         
@@ -180,7 +185,8 @@ public class CartTests
     public async Task SetCartItem_ConcurrentRequestsForSameProduct_DoNotCreateDuplicateItems()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
@@ -233,7 +239,8 @@ public class CartTests
     public async Task IncrementCartItem_TenConcurrentRequestsProduceQuantityTen()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
@@ -291,7 +298,8 @@ public class CartTests
         int expectedQuantity) 
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
     
@@ -352,7 +360,8 @@ public class CartTests
     public async Task DecrementCartItem_TenConcurrentRequestsReduceQuantityFromElevenToOne()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
 
@@ -409,7 +418,8 @@ public class CartTests
     public async Task RemoveCartItem_RemovesEntireQuantityAndPreservesOtherItems()
     {
         // Arrange
-        using var factory = new ShopApiFactory();
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
         using var client = factory.CreateClient();
     
         await factory.InitializeDatabaseAsync(

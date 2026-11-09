@@ -2,7 +2,7 @@ using B2BShop.Api.Data;
 using B2BShop.Api.Models;
 using B2BShop.Api.Contracts;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 namespace B2BShop.Api.Services;
 
 public class CartService
@@ -160,9 +160,12 @@ public class CartService
             }
             catch (DbUpdateException exception)
                 when (isNew &&
-                      exception.InnerException is SqliteException
-                          { SqliteExtendedErrorCode: 2067 })
-            {
+                      exception.InnerException is PostgresException
+                      {
+                          SqlState: PostgresErrorCodes.UniqueViolation,
+                          ConstraintName: "IX_CartItems_CartId_ProductId"
+                      })
+            {   
                 _dbContext.Entry(item!).State = EntityState.Detached;
             }
             if (attempt < maxAttempts - 1)

@@ -6,14 +6,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Testcontainers.PostgreSql;
 
 namespace B2BShop.Api.Tests;
 
 public class ShopApiFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databasePath = Path.Combine(
-        Path.GetTempPath(),
-        $"B2BShop-tests-{Guid.NewGuid():N}.db");
+    private readonly PostgreSqlContainer _database =
+        new PostgreSqlBuilder("postgres:17")
+            .Build();
+
+    public Task StartDatabaseAsync()
+    {
+        return _database.StartAsync();
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -27,24 +33,10 @@ public class ShopApiFactory : WebApplicationFactory<Program>
                 IDbContextOptionsConfiguration<ShopDbContext>>();
 
             services.AddDbContext<ShopDbContext>(options =>
-                options.UseSqlite(
-                    $"Data Source={_databasePath};Pooling=False"));
+                options.UseNpgsql(_database.GetConnectionString()));
         });
     }
 
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-
-        if (disposing)
-        {
-            File.Delete(_databasePath);
-            File.Delete($"{_databasePath}-wal");
-            File.Delete($"{_databasePath}-shm");
-            File.Delete($"{_databasePath}-journal");
-        }
-    }
-    
     public async Task InitializeDatabaseAsync(params Product[] products)
     {
         using var scope = Services.CreateScope();
@@ -56,5 +48,17 @@ public class ShopApiFactory : WebApplicationFactory<Program>
 
         context.Products.AddRange(products);
         await context.SaveChangesAsync();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await base.DisposeAsync();
+        }
+        finally
+        {
+            await _database.DisposeAsync();
+        }
     }
 }

@@ -1,82 +1,154 @@
 # B2BShop
 
-A personal learning project: a B2B shop with an ASP.NET Core API, with a Blazor web frontend and an Android app planned for later.
+A personal learning project evolving from a B2B shop into a restaurant ordering platform. The backend is built first with C#, ASP.NET Core, Entity Framework Core, and PostgreSQL. A SwiftUI iOS app is planned next, followed by a web frontend (potentially Blazor) and an Android app.
+
+The repository currently contains the API and integration tests. Restaurant-specific models and client applications are planned, not implemented.
 
 ## Current status
 
-- ASP.NET Core targeting .NET 10
-- `GET /` returns `Hello World!`
-- `GET /api/products` returns three sample products as JSON
-- `GET /api/products/{id}` returns a product, or HTTP 404 for an unknown ID
-- ProductService, CartService, and ShopDbContext use scoped lifetimes through dependency injection
-- EF Core with SQLite and migrations for Products, Carts, and CartItems
-- `POST /api/carts` creates a persisted empty cart and returns HTTP 201 with its ID
-- `GET /api/carts/{id}` returns cart items and calculated totals, or HTTP 404 for an unknown cart
-- `PUT /api/carts/{cartId}/items/{productId}` sets a product quantity between 1 and 99
-- Setting the same quantity again leaves the quantity unchanged
-- `POST /api/carts/{cartId}/items/{productId}/increment` increases the quantity by one, creating a missing item with quantity one
-- `POST /api/carts/{cartId}/items/{productId}/decrement` decreases the quantity by one and removes the item when its quantity reaches zero
-- Decrementing an absent item succeeds without changing the cart, provided the cart and product exist
-- EF Core quantity concurrency checks and bounded retries handle concurrent updates and first-insert conflicts; exhausted retries return HTTP 409
-- Prices are read from the product catalog; clients submit only quantities
-- Invalid quantities return HTTP 400; unknown carts or products return HTTP 404
-- Cart responses use a DTO rather than exposing database entities
+- ASP.NET Core and EF Core targeting .NET 10
+- PostgreSQL 17 through Npgsql, with Docker Compose for local development
+- Scoped ProductService, CartService, and ShopDbContext
+- EF Core migrations for Products, Carts, CartItems, and ASP.NET Core Identity
+- Product prices stored as integer cent amounts; cart totals calculated using long integers
+- Three sample products seeded in Development when the Products table is empty
+- ASP.NET Core Identity registration and login, with unique email addresses
+- Cart DTOs expose calculated prices and totals rather than database entities
 - A unique index prevents duplicate product rows within a cart
-- Product endpoints read persisted data from SQLite through EF Core
-- Three sample products are seeded in Development when the Products table is empty
-- Product prices are stored as integer cent amounts
-- Run locally and verified in the browser
+- Quantity concurrency checks and bounded retries handle competing updates and first-insert conflicts
+- Sixteen integration test cases passing against isolated PostgreSQL test containers
 
-## Getting started
+## API endpoints
 
-Prerequisite: .NET 10 SDK.
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/` | Returns `Hello World!` |
+| GET | `/api/products` | Returns the persisted product catalog |
+| GET | `/api/products/{id}` | Returns a product, or HTTP 404 |
+| POST | `/api/auth/register` | Registers a user |
+| POST | `/api/auth/login?useCookies=true` | Signs in using cookies |
+| GET | `/api/auth/me` | Returns the authenticated user's ID and email; otherwise HTTP 401 |
+| POST | `/api/carts` | Creates an empty cart; returns HTTP 201 with its ID and Location |
+| GET | `/api/carts/{id}` | Returns items and calculated totals, or HTTP 404 |
+| PUT | `/api/carts/{cartId}/items/{productId}` | Sets an absolute quantity from 1 to 99 |
+| POST | `/api/carts/{cartId}/items/{productId}/increment` | Adds one, creating a missing item with quantity one |
+| POST | `/api/carts/{cartId}/items/{productId}/decrement` | Subtracts one, removing the item at zero |
+| DELETE | `/api/carts/{cartId}/items/{productId}` | Removes the entire item, regardless of quantity |
+
+Identity also maps its built-in account-management endpoints under `/api/auth`; dedicated coverage currently focuses on registration, cookie login, and the current-user endpoint.
+
+Cart endpoints are currently public and carts have no user ownership checks. Setting the same quantity again leaves the quantity unchanged. Decrementing or deleting an absent item succeeds without changing the cart, provided the cart and product exist. Invalid quantities return HTTP 400; unknown carts or products return HTTP 404. Exhausted concurrency retries return HTTP 409.
+
+## Local development
+
+Prerequisites:
+
+- .NET 10 SDK
+- Docker with Docker Compose and a running Linux container runtime
+- On the current macOS setup, Colima provides the Docker runtime: `colima start`
+
+Run the following commands from the repository root unless stated otherwise.
+
+### Start PostgreSQL
+
+Create a local `.env` file beside `compose.yaml`:
+
+```dotenv
+POSTGRES_PASSWORD=replace-with-your-local-development-password
+```
+
+The `.env` file is excluded from Git. Use a development-only password.
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Wait for the `postgres` service to report `healthy`. The container creates the `b2bshop` database and development user on first initialization. PostgreSQL is exposed only on `127.0.0.1:5432`.
+
+Data persists in the named `postgres_data` volume. `docker compose stop` stops the service; `docker compose up -d` starts it again. Removing the volume deletes its database contents. Changing `.env` does not change the password of a database already initialized in the volume.
+
+### Configure the API connection
+
+Docker Compose reads `.env`; ASP.NET Core does not automatically read it. Store the API connection string in local .NET User Secrets using the same password:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:ShopDatabase" 'Host=localhost;Port=5432;Database=b2bshop;Username=b2bshop;Password=REPLACE_WITH_YOUR_PASSWORD' --project B2BShop.Api
+```
+
+The API project already contains a UserSecretsId. User Secrets are stored outside the repository and loaded in Development. They are not encrypted and are intended for local development only. Do not commit passwords or connection strings containing credentials.
+
+### Apply migrations and run
+
+The local EF tool manifest is inside `B2BShop.Api`, so run these commands from that directory:
 
 ```bash
 cd B2BShop.Api
 dotnet tool restore
-dotnet ef database update
-dotnet run --urls http://localhost:5080
+dotnet ef database update -- --environment Development
+dotnet run --environment Development --urls http://localhost:5080
 ```
 
-Open http://localhost:5080 in your browser, or visit http://localhost:5080/api/products to view the sample products. Press Ctrl+C to stop the server.
+Open [the product catalog](http://localhost:5080/api/products). Startup in Development seeds three sample products if the table is empty. Existing products persist across restarts. Press Ctrl+C to stop the API.
 
-The migration creates a local `shop.db` database with an empty `Products` table. On startup in Development, the application inserts three sample products if the table is empty. Existing products persist across restarts. Database files are excluded from Git; migrations and the local tool manifest are versioned.
+Active PostgreSQL migrations are in `B2BShop.Api/Migrations`. Earlier SQLite migrations are archived in `docs/sqlite-migrations` and are not compiled into the API. `InitialPostgres` creates a fresh schema; it does not transfer data from an existing SQLite database. An old local `shop.db` is no longer used by the API when configured as above. The legacy SQLite connection string and package still remain to be cleaned up.
 
 ## Tests
 
-The solution includes the API and an xUnit test project. From the repository root, run:
+With Docker running, execute from the repository root:
 
 ```bash
 dotnet test B2BShop.Api.Tests
 ```
 
-Twelve integration test cases cover:
+To run a single test:
+
+```bash
+dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetrievedAsEmptyCart"
+```
+
+Tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
+
+Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported run passed all 16 cases in approximately 56 seconds.
+
+Coverage includes:
 
 - Creating and retrieving an empty cart
-- Repeated quantity-setting requests, a single cart item, and calculated totals
+- Repeated quantity-setting requests, item prices, and calculated totals
 - Invalid quantities (-1, 0, and 100) without changing the cart
 - Unknown carts and products returning HTTP 404
-- Concurrent quantity-setting requests leaving one item with the requested quantity
-- Ten concurrent increments producing one item with quantity ten
+- Concurrent quantity-setting requests without duplicate items
+- Ten concurrent increments producing quantity ten
 - Decrementing quantity three to two, removing quantity one, and decrementing an absent item
+- Ten concurrent decrements reducing quantity eleven to one
+- Removing an entire item while preserving another product, including repeated deletion
+- Unauthenticated current-user requests returning HTTP 401
+- Registration, cookie login, and retrieval of the authenticated user
 
-Tests use WebApplicationFactory in the Testing environment with a unique temporary SQLite file per factory and separate connections per context. Migrations create the test schema; the local shop.db database is not used. Test database files are removed when the factory is disposed.
+## Planned scope
 
-## Next steps
+The next phase focuses on a realistic backend before starting client applications:
 
-1. Test concurrent decrements and increment/decrement quantity boundaries.
-2. Add a dedicated endpoint for removing an entire cart item.
-3. Add checkout with stored order prices and a Blazor frontend.
-4. Later, add customer ownership/authentication, SQL Server support, and an Android client.
+1. Finish PostgreSQL cleanup, including legacy SQLite dependencies and sample-product ID generation.
+2. Model providers (`Place`: restaurant, bar, or kiosk) with addresses and coordinates, categories, and products with descriptions, image URLs, item information, availability, and dietary flags.
+3. Add product option groups and choices with selection limits and price adjustments.
+4. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
+5. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
+6. Add and test the required customer and management endpoints incrementally.
+7. Build the SwiftUI iOS client, then web and Android clients against the same API.
+
+Loyalty points, digital stamp cards, and discount vouchers are secondary to the initial ordering flow. EUDI work is a separate project.
 
 ## Known limitations
 
-Concurrency tests start overlapping HTTP requests but do not deterministically force every conflict path. Parallel decrement behavior and mixed increment/decrement operations still need dedicated tests.
+Cart ownership and access protection, restaurant-specific models, orders, rewards, and client applications are not implemented yet. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
 
-Quantity changes retry recognized insert and optimistic concurrency conflicts up to 20 times. Under sustained contention, requests may return HTTP 409. Other database failures are not handled by this retry loop.
+Sample products currently use explicit integer IDs. PostgreSQL identity sequences are not advanced by those explicit inserts; this must be addressed before adding products with database-generated IDs.
 
-PUT sets an absolute quantity; increment and decrement apply relative changes. Automatically repeating an increment or decrement HTTP request after an uncertain network outcome can apply the action twice; request deduplication is not implemented.
+Concurrency tests start overlapping HTTP requests but do not deterministically force every conflict path. Mixed increment/decrement operations and additional quantity-boundary cases still need dedicated tests.
 
-Quantity is used as the concurrency token. It protects changes against a different current quantity, but does not detect an intervening change that returns to the same quantity. Concurrent deletion of carts or products is not specifically handled.
+Quantity changes retry optimistic concurrency conflicts and PostgreSQL unique violations for the cart/product index up to 20 times. Under sustained contention, requests may return HTTP 409. Other database failures are not handled by this retry loop.
 
-Cart ownership, authentication, a dedicated item-removal endpoint, checkout, and the web frontend are not implemented yet. SQLite-specific unique-constraint detection must be adapted when adding SQL Server support.
+PUT sets an absolute quantity; increment and decrement apply relative changes. Repeating a relative request after an uncertain network outcome can apply the action twice; request deduplication is not implemented.
+
+Quantity is the concurrency token. It detects a different current quantity, but not an intervening change that returns to the same value. Concurrent deletion of carts or products is not specifically handled.

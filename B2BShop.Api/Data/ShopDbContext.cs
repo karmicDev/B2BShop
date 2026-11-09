@@ -1,9 +1,10 @@
 using B2BShop.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace B2BShop.Api.Data;
 
-public class ShopDbContext : DbContext
+public class ShopDbContext : IdentityDbContext<ApplicationUser>
 {
     public ShopDbContext(DbContextOptions<ShopDbContext> options) : base(options)
     {

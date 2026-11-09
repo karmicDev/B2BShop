@@ -1,16 +1,50 @@
 using B2BShop.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using B2BShop.Api.Contracts;
+using B2BShop.Api.Models;
+using Microsoft.AspNetCore.Identity;
 
 using B2BShop.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddDbContext<ShopDbContext>(options =>
-    options.UseSqlite(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("ShopDatabase")));
 
+builder.Services.AddAuthorization();
+builder.Services.AddIdentityApiEndpoints<ApplicationUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ShopDbContext>();
+
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGroup("/api/auth").MapIdentityApi<ApplicationUser>();
+app.MapGet("/api/auth/me",
+        async (
+            System.Security.Claims.ClaimsPrincipal principal,
+            UserManager<ApplicationUser> userManager) =>
+        {
+            var user = await userManager.GetUserAsync(principal);
+
+            if (user is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            return Results.Ok(new
+            {
+                user.Id,
+                user.Email
+            });
+        })
+    .RequireAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
