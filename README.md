@@ -2,21 +2,24 @@
 
 A personal learning project evolving from a B2B shop into a restaurant ordering platform. The backend is built first with C#, ASP.NET Core, Entity Framework Core, and PostgreSQL. A SwiftUI iOS app is planned next, followed by a web frontend (potentially Blazor) and an Android app.
 
-The repository currently contains the API and integration tests. Restaurant-specific models and client applications are planned, not implemented.
+The repository currently contains the API and integration tests. An initial Place model represents a provider location. Addresses, coordinates, other restaurant-specific models, and client applications are planned, not implemented.
 
 ## Current status
 
 - ASP.NET Core and EF Core targeting .NET 10
 - PostgreSQL 17 through Npgsql, with Docker Compose for local development
 - Scoped ProductService, CartService, and ShopDbContext
-- EF Core migrations for Products, Carts, CartItems, and ASP.NET Core Identity
+- EF Core migrations for Products, Carts, CartItems, Places, and ASP.NET Core Identity
+- Place names are trimmed and normalized with invariant uppercase; invalid names are rejected before changing the object
+- A unique index on Place.NormalizedName enforces globally unique provider names regardless of case or surrounding whitespace
 - Product prices stored as integer cent amounts; cart totals calculated using long integers
 - Three sample products seeded in Development when the Products table is empty, using PostgreSQL-generated IDs
 - ASP.NET Core Identity registration and login, with unique email addresses
 - Cart DTOs expose calculated prices and totals rather than database entities
 - A unique index prevents duplicate product rows within a cart
 - Quantity concurrency checks and bounded retries handle competing updates and first-insert conflicts
-- Seventeen integration test cases passing against isolated PostgreSQL test containers
+- Seventeen existing PostgreSQL integration test cases and eight Place naming unit test cases
+- Place database uniqueness integration coverage and HTTP endpoints are the next step
 
 ## API endpoints
 
@@ -109,11 +112,19 @@ To run a single test:
 dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetrievedAsEmptyCart"
 ```
 
-Tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
+Integration tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
 
 Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported run passed all 17 cases in approximately 60 seconds.
 
-Coverage includes:
+The eight Place unit test cases run without Docker and cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, and successful renaming. Run them separately with:
+
+```bash
+dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~PlaceTests"
+```
+
+The earlier reported run of 17 integration tests predates AddPlaces. A full-suite run against the new migration and a dedicated database uniqueness test are still pending.
+
+Integration coverage includes:
 
 - Running the actual product initializer and then saving an additional product with a generated ID, verifying the count increases by one and the stored values match
 - Creating and retrieving an empty cart
@@ -132,7 +143,7 @@ Coverage includes:
 
 The next phase focuses on a realistic backend before starting client applications:
 
-1. Model providers (`Place`: restaurant, bar, or kiosk) with addresses and coordinates, categories, and products with descriptions, image URLs, item information, availability, and dietary flags.
+1. Verify Place name uniqueness against PostgreSQL, then extend providers (restaurant, bar, or kiosk) with addresses and coordinates. Add categories and products with descriptions, image URLs, item information, availability, and dietary flags.
 2. Add product option groups and choices with selection limits and price adjustments.
 3. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
 4. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
@@ -143,7 +154,7 @@ Loyalty points, digital stamp cards, and discount vouchers are secondary to the 
 
 ## Known limitations
 
-Cart ownership and access protection, restaurant-specific models, orders, rewards, and client applications are not implemented yet. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
+Place currently contains only identity and naming rules; address, coordinates, provider type, relationships, and HTTP endpoints are not implemented yet. Cart ownership and access protection, the remaining restaurant-specific models, orders, rewards, and client applications are also pending. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
 
 Cart tests still use explicit product IDs for controlled fixtures. The product initialization test verifies the current seeding-and-insertion flow after all migrations; it does not separately reproduce the historical sequence repair against a pre-repair database.
 

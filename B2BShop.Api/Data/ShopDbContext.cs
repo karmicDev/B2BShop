@@ -16,6 +16,8 @@ public class ShopDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<CartItem> CartItems => Set<CartItem>();
 
+    public DbSet<Place> Places => Set<Place>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -30,5 +32,8 @@ public class ShopDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<CartItem>()
             .Property(item => item.Quantity)
             .IsConcurrencyToken();
+        modelBuilder.Entity<Place>()
+            .HasIndex(place => place.NormalizedName)
+            .IsUnique();
     }
 }

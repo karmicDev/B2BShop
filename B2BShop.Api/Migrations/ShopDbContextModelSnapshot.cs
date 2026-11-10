@@ -125,6 +125,30 @@ namespace B2BShop.Api.Migrations
                     b.ToTable("CartItems");
                 });
 
+            modelBuilder.Entity("B2BShop.Api.Models.Place", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Places");
+                });
+
             modelBuilder.Entity("B2BShop.Api.Models.Product", b =>
                 {
                     b.Property<int>("Id")
