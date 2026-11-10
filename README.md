@@ -18,8 +18,8 @@ The repository currently contains the API and integration tests. An initial Plac
 - Cart DTOs expose calculated prices and totals rather than database entities
 - A unique index prevents duplicate product rows within a cart
 - Quantity concurrency checks and bounded retries handle competing updates and first-insert conflicts
-- Seventeen existing PostgreSQL integration test cases and eight Place naming unit test cases
-- Place database uniqueness integration coverage and HTTP endpoints are the next step
+- Twenty-seven passing test cases: nineteen PostgreSQL integration cases and eight Place naming unit cases
+- Place integration tests verify rejection of duplicate normalized names and persistence of distinct providers; Place HTTP endpoints are not implemented yet
 
 ## API endpoints
 
@@ -114,18 +114,20 @@ dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetri
 
 Integration tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
 
-Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported run passed all 17 cases in approximately 60 seconds.
+Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported full-suite run passed all 27 cases in approximately 121 seconds.
 
-The eight Place unit test cases run without Docker and cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, and successful renaming. Run them separately with:
+The eight Place unit test cases run without Docker and cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, and successful renaming. Run all Place tests, including the two Docker-backed integration cases, with:
 
 ```bash
 dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~PlaceTests"
 ```
 
-The earlier reported run of 17 integration tests predates AddPlaces. A full-suite run against the new migration and a dedicated database uniqueness test are still pending.
+The full suite includes the AddPlaces migration. Place integration tests verify the PostgreSQL unique-violation code and the exact normalized-name index, confirm that a rejected duplicate leaves one stored provider, and reload three distinct providers to check their persisted names.
 
 Integration coverage includes:
 
+- Rejecting Place names that normalize to an existing name, including case and surrounding-whitespace differences
+- Persisting and retrieving multiple Places with distinct names
 - Running the actual product initializer and then saving an additional product with a generated ID, verifying the count increases by one and the stored values match
 - Creating and retrieving an empty cart
 - Repeated quantity-setting requests, item prices, and calculated totals
@@ -143,7 +145,7 @@ Integration coverage includes:
 
 The next phase focuses on a realistic backend before starting client applications:
 
-1. Verify Place name uniqueness against PostgreSQL, then extend providers (restaurant, bar, or kiosk) with addresses and coordinates. Add categories and products with descriptions, image URLs, item information, availability, and dietary flags.
+1. Extend providers (restaurant, bar, or kiosk) with addresses and coordinates. Add categories and products with descriptions, image URLs, item information, availability, and dietary flags.
 2. Add product option groups and choices with selection limits and price adjustments.
 3. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
 4. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
