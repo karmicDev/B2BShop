@@ -11,12 +11,12 @@ The repository currently contains the API and integration tests. Restaurant-spec
 - Scoped ProductService, CartService, and ShopDbContext
 - EF Core migrations for Products, Carts, CartItems, and ASP.NET Core Identity
 - Product prices stored as integer cent amounts; cart totals calculated using long integers
-- Three sample products seeded in Development when the Products table is empty
+- Three sample products seeded in Development when the Products table is empty, using PostgreSQL-generated IDs
 - ASP.NET Core Identity registration and login, with unique email addresses
 - Cart DTOs expose calculated prices and totals rather than database entities
 - A unique index prevents duplicate product rows within a cart
 - Quantity concurrency checks and bounded retries handle competing updates and first-insert conflicts
-- Sixteen integration test cases passing against isolated PostgreSQL test containers
+- Seventeen integration test cases passing against isolated PostgreSQL test containers
 
 ## API endpoints
 
@@ -91,7 +91,9 @@ dotnet run --environment Development --urls http://localhost:5080
 
 Open [the product catalog](http://localhost:5080/api/products). Startup in Development seeds three sample products if the table is empty. Existing products persist across restarts. Press Ctrl+C to stop the API.
 
-Active PostgreSQL migrations are in `B2BShop.Api/Migrations`. Earlier SQLite migrations are archived in `docs/sqlite-migrations` and are not compiled into the API. `InitialPostgres` creates a fresh schema; it does not transfer data from an existing SQLite database. An old local `shop.db` is no longer used by the API when configured as above. The legacy SQLite connection string and package still remain to be cleaned up.
+Active PostgreSQL migrations are in `B2BShop.Api/Migrations`. Earlier SQLite migrations are archived in `docs/sqlite-migrations` and are not compiled into the API. `InitialPostgres` creates a fresh schema; it does not transfer data from an existing SQLite database. An old local `shop.db` is no longer used by the API when configured as above. The legacy SQLite connection string and package have been removed from the active application.
+
+`RepairProductIdentitySequence` restarts the product identity sequence at 4 to accommodate the original development products with explicit IDs 1–3. It preserves existing rows and does not rewind the sequence on rollback. This migration targets that known initial dataset; it is not a general repair for databases containing arbitrary product IDs. New sample products omit explicit IDs and use PostgreSQL identity generation. IDs are identifiers, not a gapless counter or a product count.
 
 ## Tests
 
@@ -109,10 +111,11 @@ dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetri
 
 Tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
 
-Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported run passed all 16 cases in approximately 56 seconds.
+Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported run passed all 17 cases in approximately 60 seconds.
 
 Coverage includes:
 
+- Running the actual product initializer and then saving an additional product with a generated ID, verifying the count increases by one and the stored values match
 - Creating and retrieving an empty cart
 - Repeated quantity-setting requests, item prices, and calculated totals
 - Invalid quantities (-1, 0, and 100) without changing the cart
@@ -129,13 +132,12 @@ Coverage includes:
 
 The next phase focuses on a realistic backend before starting client applications:
 
-1. Finish PostgreSQL cleanup, including legacy SQLite dependencies and sample-product ID generation.
-2. Model providers (`Place`: restaurant, bar, or kiosk) with addresses and coordinates, categories, and products with descriptions, image URLs, item information, availability, and dietary flags.
-3. Add product option groups and choices with selection limits and price adjustments.
-4. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
-5. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
-6. Add and test the required customer and management endpoints incrementally.
-7. Build the SwiftUI iOS client, then web and Android clients against the same API.
+1. Model providers (`Place`: restaurant, bar, or kiosk) with addresses and coordinates, categories, and products with descriptions, image URLs, item information, availability, and dietary flags.
+2. Add product option groups and choices with selection limits and price adjustments.
+3. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
+4. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
+5. Add and test the required customer and management endpoints incrementally.
+6. Build the SwiftUI iOS client, then web and Android clients against the same API.
 
 Loyalty points, digital stamp cards, and discount vouchers are secondary to the initial ordering flow. EUDI work is a separate project.
 
@@ -143,7 +145,7 @@ Loyalty points, digital stamp cards, and discount vouchers are secondary to the 
 
 Cart ownership and access protection, restaurant-specific models, orders, rewards, and client applications are not implemented yet. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
 
-Sample products currently use explicit integer IDs. PostgreSQL identity sequences are not advanced by those explicit inserts; this must be addressed before adding products with database-generated IDs.
+Cart tests still use explicit product IDs for controlled fixtures. The product initialization test verifies the current seeding-and-insertion flow after all migrations; it does not separately reproduce the historical sequence repair against a pre-repair database.
 
 Concurrency tests start overlapping HTTP requests but do not deterministically force every conflict path. Mixed increment/decrement operations and additional quantity-boundary cases still need dedicated tests.
 

@@ -12,9 +12,9 @@ public class DbInitializer
         }
 
         dbContext.Products.AddRange(
-            new Product(1, "Mineral Water", 99),
-            new Product(2, "Apple Juice", 249),
-            new Product(3, "Coffee Beans", 1299)
+            new Product("Mineral Water", 99),
+            new Product("Apple Juice", 249),
+            new Product("Coffee Beans", 1299)
         );
         await dbContext.SaveChangesAsync();
     }

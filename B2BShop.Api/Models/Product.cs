@@ -16,4 +16,10 @@ public record Product
         Name = name;
         PriceInCents = priceInCents;
     }
+    
+    public Product(string name, int priceInCents)
+    {
+        Name = name;
+        PriceInCents = priceInCents;
+    }
 }
