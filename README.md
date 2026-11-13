@@ -1,5 +1,7 @@
 # B2BShop
 
+[![CI/CD](https://github.com/karmicDev/B2BShop/actions/workflows/ci.yml/badge.svg)](https://github.com/karmicDev/B2BShop/actions/workflows/ci.yml)
+
 A personal learning project evolving from a B2B shop into a restaurant ordering platform. The backend is built first with C#, ASP.NET Core, Entity Framework Core, and PostgreSQL. A SwiftUI iOS app is planned next, followed by a web frontend (potentially Blazor) and an Android app.
 
 The repository currently contains the API and integration tests. An initial Place model represents a provider location. Addresses, coordinates, other restaurant-specific models, and client applications are planned, not implemented.
@@ -140,6 +142,25 @@ Integration coverage includes:
 - Removing an entire item while preserving another product, including repeated deletion
 - Unauthenticated current-user requests returning HTTP 401
 - Registration, cookie login, and retrieval of the authenticated user
+
+## CI/CD
+
+GitHub Actions runs `.github/workflows/ci.yml` on every pull request and on every push to `main`.
+
+1. **Build and test**: restores and builds the solution in Release, then fails if the EF Core model has changes without a migration (`dotnet ef migrations has-pending-model-changes`). It then runs the full test suite. The PostgreSQL integration tests use Testcontainers on the runner's Docker engine, as they do locally. TRX results and Coverlet coverage are uploaded as the `test-results` artifact.
+2. **Container image**: runs only after the tests pass and builds the API image from the multi-stage `Dockerfile`. Pull requests only check that the image builds. Pushes to `main` publish it to `ghcr.io/karmicdev/b2bshop-api`, tagged with the short commit SHA and `latest`.
+
+Dependabot proposes weekly NuGet updates and monthly updates for GitHub Actions and the Docker base images.
+
+Run the published image against a reachable PostgreSQL database:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e ConnectionStrings__ShopDatabase='Host=host.docker.internal;Port=5432;Database=b2bshop;Username=b2bshop;Password=REPLACE_WITH_YOUR_PASSWORD' \
+  ghcr.io/karmicdev/b2bshop-api:latest
+```
+
+The image does not apply migrations at startup. Apply them separately, as described under Local development. Deploying the image to a hosting environment is not automated yet.
 
 ## Planned scope
 
