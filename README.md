@@ -1,25 +1,36 @@
 # B2BShop
 
-A personal learning project evolving from a B2B shop into a restaurant ordering platform. The backend is built first with C#, ASP.NET Core, Entity Framework Core, and PostgreSQL. A SwiftUI iOS app is planned next, followed by a web frontend (potentially Blazor) and an Android app.
+REST API for an ordering platform, built with **C#, ASP.NET Core, Entity Framework Core and PostgreSQL**. It started as a B2B shop and is evolving into a restaurant ordering platform. It is a personal learning project, developed in small steps with conventional commits.
 
-The repository currently contains the API and integration tests. An initial Place model represents a provider location. Addresses, coordinates, other restaurant-specific models, and client applications are planned, not implemented.
+The backend comes first. Client apps (SwiftUI iOS, then web and Android) are planned and not part of the repository yet.
 
-## Current status
+## Highlights
 
-- ASP.NET Core and EF Core targeting .NET 10
-- PostgreSQL 17 through Npgsql, with Docker Compose for local development
-- Scoped ProductService, CartService, and ShopDbContext
-- EF Core migrations for Products, Carts, CartItems, Places, and ASP.NET Core Identity
-- Place names are trimmed and normalized with invariant uppercase; invalid names are rejected before changing the object
-- A unique index on Place.NormalizedName enforces globally unique provider names regardless of case or surrounding whitespace
-- Product prices stored as integer cent amounts; cart totals calculated using long integers
-- Three sample products seeded in Development when the Products table is empty, using PostgreSQL-generated IDs
-- ASP.NET Core Identity registration and login, with unique email addresses
-- Cart DTOs expose calculated prices and totals rather than database entities
-- A unique index prevents duplicate product rows within a cart
-- Quantity concurrency checks and bounded retries handle competing updates and first-insert conflicts
-- Twenty-seven passing test cases: nineteen PostgreSQL integration cases and eight Place naming unit cases
-- Place integration tests verify rejection of duplicate normalized names and persistence of distinct providers; Place HTTP endpoints are not implemented yet
+- **Concurrency-safe cart:** quantity updates use optimistic concurrency with bounded retries, and a unique index prevents duplicate cart rows under parallel requests. Tests fire ten concurrent increments and decrements against a real database.
+- **Real database in tests:** 19 integration tests run against PostgreSQL 17 through Testcontainers, each with its own container, applying the actual EF Core migrations. 8 further unit tests cover domain rules.
+- **Money as integer cents:** prices are stored as cent amounts and totals are calculated with long integers, so no floating-point rounding.
+- **Clean API boundary:** DTOs expose calculated prices and totals instead of database entities. Errors map to HTTP 400, 401, 404 and 409.
+- **Authentication:** ASP.NET Core Identity with registration, cookie login and a current-user endpoint.
+- **Database migration:** moved from SQLite to PostgreSQL with EF Core migrations; the old SQLite migrations are archived in `docs/`.
+
+## Tech stack
+
+| Area | Technology |
+| --- | --- |
+| Language and framework | C#, ASP.NET Core (.NET 10) |
+| Data access | Entity Framework Core, Npgsql |
+| Database | PostgreSQL 17 |
+| Authentication | ASP.NET Core Identity |
+| Testing | xUnit, WebApplicationFactory, Testcontainers |
+| Local environment | Docker Compose, .NET User Secrets |
+
+## Status
+
+**Done:** product catalog, carts with quantities and totals, registration and login, provider (Place) model with unique normalized names.
+
+**In progress:** provider addresses and coordinates.
+
+**Next:** cart ownership and access protection, ordering with server-side price calculation, then the SwiftUI iOS client. See [Planned scope](#planned-scope) and [Known limitations](#known-limitations) for details.
 
 ## API endpoints
 
