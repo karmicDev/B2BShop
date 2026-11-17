@@ -9,10 +9,10 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 ## Highlights
 
 - **Concurrency-safe cart:** quantity updates use optimistic concurrency with bounded retries, and a unique index prevents duplicate cart rows under parallel requests. Tests fire ten concurrent increments and decrements against a real database.
-- **Real database in tests:** 19 integration tests run against PostgreSQL 17 through Testcontainers, each with its own container, applying the actual EF Core migrations. 21 further unit tests cover domain rules such as name normalization and coordinate validation.
+- **Real database in tests:** 21 integration tests run against PostgreSQL 17 through Testcontainers, each with its own container, applying the actual EF Core migrations. 21 further unit tests cover domain rules such as name normalization and coordinate validation.
 - **Money as integer cents:** prices are stored as cent amounts and totals are calculated with long integers, so no floating-point rounding.
 - **Clean API boundary:** DTOs expose calculated prices and totals instead of database entities. Errors map to HTTP 400, 401, 404 and 409.
-- **Authentication:** ASP.NET Core Identity with registration, cookie login and a current-user endpoint.
+- **Authentication and ownership:** ASP.NET Core Identity with registration, cookie login and a current-user endpoint. Every cart belongs to the user who created it; other users get HTTP 404, so the API does not reveal that the cart exists.
 - **Database migration:** moved from SQLite to PostgreSQL with EF Core migrations; the old SQLite migrations are archived in `docs/`.
 
 ## Tech stack
@@ -29,11 +29,11 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 
 ## Status
 
-**Done:** product catalog, carts with quantities and totals, registration and login, provider (Place) model with unique normalized names, type, and an address with validated coordinates (stored as owned EF Core types).
+**Done:** product catalog, carts with quantities and totals, registration and login, cart ownership (all cart endpoints require login and are scoped to the owner), provider (Place) model with unique normalized names, type, and an address with validated coordinates (stored as owned EF Core types).
 
 **In progress:** HTTP endpoints for providers.
 
-**Next:** cart ownership and access protection, ordering with server-side price calculation, then the SwiftUI iOS client. See [Planned scope](#planned-scope) and [Known limitations](#known-limitations) for details.
+**Next:** ordering with server-side price calculation, then the SwiftUI iOS client. See [Planned scope](#planned-scope) and [Known limitations](#known-limitations) for details.
 
 ## API endpoints
 
@@ -45,8 +45,8 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 | POST | `/api/auth/register` | Registers a user |
 | POST | `/api/auth/login?useCookies=true` | Signs in using cookies |
 | GET | `/api/auth/me` | Returns the authenticated user's ID and email; otherwise HTTP 401 |
-| POST | `/api/carts` | Creates an empty cart; returns HTTP 201 with its ID and Location |
-| GET | `/api/carts/{id}` | Returns items and calculated totals, or HTTP 404 |
+| POST | `/api/carts` | Creates an empty cart owned by the caller; returns HTTP 201 with its ID and Location |
+| GET | `/api/carts/{id}` | Returns the caller's cart with items and calculated totals, or HTTP 404 |
 | PUT | `/api/carts/{cartId}/items/{productId}` | Sets an absolute quantity from 1 to 99 |
 | POST | `/api/carts/{cartId}/items/{productId}/increment` | Adds one, creating a missing item with quantity one |
 | POST | `/api/carts/{cartId}/items/{productId}/decrement` | Subtracts one, removing the item at zero |
@@ -54,7 +54,7 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 
 Identity also maps its built-in account-management endpoints under `/api/auth`; dedicated coverage currently focuses on registration, cookie login, and the current-user endpoint.
 
-Cart endpoints are currently public and carts have no user ownership checks. Setting the same quantity again leaves the quantity unchanged. Decrementing or deleting an absent item succeeds without changing the cart, provided the cart and product exist. Invalid quantities return HTTP 400; unknown carts or products return HTTP 404. Exhausted concurrency retries return HTTP 409.
+All cart endpoints require a signed-in user and return HTTP 401 otherwise. A cart belongs to the user who created it: reading or changing another user's cart returns HTTP 404, the same as an unknown cart. Setting the same quantity again leaves the quantity unchanged. Decrementing or deleting an absent item succeeds without changing the cart, provided the cart and product exist. Invalid quantities return HTTP 400; unknown carts, carts of other users, and unknown products return HTTP 404. Exhausted concurrency retries return HTTP 409.
 
 ## Local development
 
@@ -128,7 +128,7 @@ dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetri
 
 Integration tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
 
-Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported full-suite run passed all 40 cases in approximately 63 seconds.
+Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported full-suite run passed all 42 cases in approximately 2 minutes.
 
 The Place and GeoLocation unit tests run without Docker. The Place cases cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, successful renaming, and construction with an address and type. The GeoLocation cases cover valid boundary coordinates and rejection of out-of-range, NaN and infinite values. Run all Place tests, including the two Docker-backed integration cases, with:
 
@@ -143,7 +143,7 @@ Integration coverage includes:
 - Rejecting Place names that normalize to an existing name, including case and surrounding-whitespace differences
 - Persisting and retrieving multiple Places with distinct names
 - Running the actual product initializer and then saving an additional product with a generated ID, verifying the count increases by one and the stored values match
-- Creating and retrieving an empty cart
+- Creating and retrieving an empty cart as a signed-in user
 - Repeated quantity-setting requests, item prices, and calculated totals
 - Invalid quantities (-1, 0, and 100) without changing the cart
 - Unknown carts and products returning HTTP 404
@@ -152,6 +152,8 @@ Integration coverage includes:
 - Decrementing quantity three to two, removing quantity one, and decrementing an absent item
 - Ten concurrent decrements reducing quantity eleven to one
 - Removing an entire item while preserving another product, including repeated deletion
+- Every cart endpoint returning HTTP 401 without login
+- Another user's cart returning HTTP 404 on read and on every change, leaving the owner's cart unchanged
 - Unauthenticated current-user requests returning HTTP 401
 - Registration, cookie login, and retrieval of the authenticated user
 
@@ -161,7 +163,7 @@ The next phase focuses on a realistic backend before starting client application
 
 1. Extend providers (restaurant, bar, or kiosk) with addresses and coordinates. Add categories and products with descriptions, image URLs, item information, availability, and dietary flags.
 2. Add product option groups and choices with selection limits and price adjustments.
-3. Extend the existing Identity user where needed; add provider-management permissions and protect cart access. A cart and order will each belong to one provider.
+3. Extend the existing Identity user where needed; add provider-management permissions. A cart and order will each belong to one provider.
 4. Implement ordering: validate availability and options, calculate authoritative prices on the server, and store order items with names, prices, and selected options as they were at purchase time. No real payment integration is planned initially.
 5. Add and test the required customer and management endpoints incrementally.
 6. Build the SwiftUI iOS client, then web and Android clients against the same API.
@@ -170,7 +172,7 @@ Loyalty points, digital stamp cards, and discount vouchers are secondary to the 
 
 ## Known limitations
 
-Place currently contains only identity and naming rules; address, coordinates, provider type, relationships, and HTTP endpoints are not implemented yet. Cart ownership and access protection, the remaining restaurant-specific models, orders, rewards, and client applications are also pending. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
+Place has a name, type, and address with coordinates, but no relationships or HTTP endpoints yet. The remaining restaurant-specific models, orders, rewards, and client applications are also pending. Identity role support is registered, but provider-management authorization and safe administrator assignment still need implementation. Logout coverage and a cookie/CSRF strategy are needed before browser-based writes.
 
 Cart tests still use explicit product IDs for controlled fixtures. The product initialization test verifies the current seeding-and-insertion flow after all migrations; it does not separately reproduce the historical sequence repair against a pre-repair database.
 
