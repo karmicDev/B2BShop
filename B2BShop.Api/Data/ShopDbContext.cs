@@ -35,5 +35,10 @@ public class ShopDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Place>()
             .HasIndex(place => place.NormalizedName)
             .IsUnique();
+        modelBuilder.Entity<Place>()
+            .OwnsOne(place => place.Address, address =>
+            {
+                address.OwnsOne(a => a.Location);
+            });
     }
 }

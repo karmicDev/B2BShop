@@ -141,6 +141,9 @@ namespace B2BShop.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("PlaceType")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
@@ -318,6 +321,62 @@ namespace B2BShop.Api.Migrations
                     b.Navigation("Cart");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("B2BShop.Api.Models.Place", b =>
+                {
+                    b.OwnsOne("B2BShop.Api.Models.Address", "Address", b1 =>
+                        {
+                            b1.Property<int>("PlaceId")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("City")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("HouseNumber")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PostalCode")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Street")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.HasKey("PlaceId");
+
+                            b1.ToTable("Places");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PlaceId");
+
+                            b1.OwnsOne("B2BShop.Api.Models.GeoLocation", "Location", b2 =>
+                                {
+                                    b2.Property<int>("AddressPlaceId")
+                                        .HasColumnType("integer");
+
+                                    b2.Property<double>("Latitude")
+                                        .HasColumnType("double precision");
+
+                                    b2.Property<double>("Longitude")
+                                        .HasColumnType("double precision");
+
+                                    b2.HasKey("AddressPlaceId");
+
+                                    b2.ToTable("Places");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("AddressPlaceId");
+                                });
+
+                            b1.Navigation("Location")
+                                .IsRequired();
+                        });
+
+                    b.Navigation("Address");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

@@ -19,6 +19,22 @@ public class PlaceTests
         Assert.Equal("BELLA PIZZA MITTE", place.NormalizedName);
     }
 
+    [Fact]
+    public void Constructor_WithAddressAndType_SetsAllValues()
+    {
+        // Arrange
+        var address = new Address(
+            "Sonnenallee", "12", "12045", "Berlin",
+            new GeoLocation(52.48, 13.43));
+
+        // Act
+        var place = new Place("Bella Pizza Neukölln", address, PlaceType.Restaurant);
+
+        // Assert
+        Assert.Same(address, place.Address);
+        Assert.Equal(PlaceType.Restaurant, place.PlaceType);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

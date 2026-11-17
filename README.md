@@ -7,7 +7,7 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 ## Highlights
 
 - **Concurrency-safe cart:** quantity updates use optimistic concurrency with bounded retries, and a unique index prevents duplicate cart rows under parallel requests. Tests fire ten concurrent increments and decrements against a real database.
-- **Real database in tests:** 19 integration tests run against PostgreSQL 17 through Testcontainers, each with its own container, applying the actual EF Core migrations. 8 further unit tests cover domain rules.
+- **Real database in tests:** 19 integration tests run against PostgreSQL 17 through Testcontainers, each with its own container, applying the actual EF Core migrations. 21 further unit tests cover domain rules such as name normalization and coordinate validation.
 - **Money as integer cents:** prices are stored as cent amounts and totals are calculated with long integers, so no floating-point rounding.
 - **Clean API boundary:** DTOs expose calculated prices and totals instead of database entities. Errors map to HTTP 400, 401, 404 and 409.
 - **Authentication:** ASP.NET Core Identity with registration, cookie login and a current-user endpoint.
@@ -26,9 +26,9 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 
 ## Status
 
-**Done:** product catalog, carts with quantities and totals, registration and login, provider (Place) model with unique normalized names.
+**Done:** product catalog, carts with quantities and totals, registration and login, provider (Place) model with unique normalized names, type, and an address with validated coordinates (stored as owned EF Core types).
 
-**In progress:** provider addresses and coordinates.
+**In progress:** HTTP endpoints for providers.
 
 **Next:** cart ownership and access protection, ordering with server-side price calculation, then the SwiftUI iOS client. See [Planned scope](#planned-scope) and [Known limitations](#known-limitations) for details.
 
@@ -125,9 +125,9 @@ dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~CreateCart_CanBeRetri
 
 Integration tests use WebApplicationFactory in the Testing environment and Testcontainers.PostgreSql with `postgres:17`. Each factory owns a separate container with its own database and dynamically assigned host port. PostgreSQL must be started before creating the HTTP client. The factory replaces the application's database registration, applies the actual migrations, and inserts only the data requested by the test. Asynchronous disposal shuts down the test API and removes the database container.
 
-Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported full-suite run passed all 27 cases in approximately 121 seconds.
+Tests do not use the Docker Compose development database, its password, or its data. Docker must be available, but the Compose PostgreSQL service does not need to be running for tests. Initial runs may download additional container images. A container per test case prioritizes isolation over speed; the most recent reported full-suite run passed all 40 cases in approximately 63 seconds.
 
-The eight Place unit test cases run without Docker and cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, and successful renaming. Run all Place tests, including the two Docker-backed integration cases, with:
+The Place and GeoLocation unit tests run without Docker. The Place cases cover trimmed/normalized construction, rejection of null or whitespace names, preservation of both names after a rejected rename, successful renaming, and construction with an address and type. The GeoLocation cases cover valid boundary coordinates and rejection of out-of-range, NaN and infinite values. Run all Place tests, including the two Docker-backed integration cases, with:
 
 ```bash
 dotnet test B2BShop.Api.Tests --filter "FullyQualifiedName~PlaceTests"
