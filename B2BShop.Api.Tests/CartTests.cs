@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Runtime.InteropServices.JavaScript;
 using B2BShop.Api.Contracts;
 using B2BShop.Api.Data;
 using B2BShop.Api.Models;
@@ -19,8 +18,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         // Act
         using var createResponse =  await client.PostAsync("api/carts", null);
@@ -50,8 +49,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
         using var createResponse = await client.PostAsync("api/carts", null);
         
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
@@ -93,8 +92,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
         using var createResponse = await client.PostAsync("api/carts", null);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         
@@ -125,8 +124,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         // Act
         var unknownCartId = Guid.NewGuid();
@@ -150,8 +149,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
         
         // Act
         using var createResponse = await client.PostAsync("api/carts", null);
@@ -187,8 +186,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -241,8 +240,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -300,8 +299,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
     
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -362,8 +361,8 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
         await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -420,11 +419,10 @@ public class CartTests
         // Arrange
         await using var factory = new ShopApiFactory();
         await factory.StartDatabaseAsync();
-        using var client = factory.CreateClient();
-    
         await factory.InitializeDatabaseAsync(
             new Product(2, "Apple Juice", 249), 
             new Product(3, "Coffee Beans", 1299));
+        using var client = await factory.CreateAuthenticatedClientAsync();
     
         using var createResponse =
             await client.PostAsync("/api/carts", null);
@@ -484,5 +482,74 @@ public class CartTests
         Assert.Equal(3, unchangedItem.ProductId);
         Assert.Equal(2, unchangedItem.Quantity);
         Assert.Equal(2598L, unchangedCart.TotalPriceInCents);
+    }
+
+    [Fact]
+    public async Task CartEndpoints_WithoutLoginReturnUnauthorized()
+    {
+        // Arrange
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var client = factory.CreateClient();
+        var cartUrl = $"/api/carts/{Guid.NewGuid()}";
+
+        // Act
+        using var create = await client.PostAsync("/api/carts", null);
+        using var get = await client.GetAsync(cartUrl);
+        using var set = await client.PutAsJsonAsync(
+            $"{cartUrl}/items/2", new SetCartItemRequest(1));
+        using var increment = await client.PostAsync($"{cartUrl}/items/2/increment", null);
+        using var decrement = await client.PostAsync($"{cartUrl}/items/2/decrement", null);
+        using var remove = await client.DeleteAsync($"{cartUrl}/items/2");
+
+        // Assert
+        Assert.All(
+            new[] { create, get, set, increment, decrement, remove },
+            response => Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode));
+    }
+
+    [Fact]
+    public async Task CartOfAnotherUser_CannotBeReadOrChanged()
+    {
+        // Arrange
+        await using var factory = new ShopApiFactory();
+        await factory.StartDatabaseAsync();
+        await factory.InitializeDatabaseAsync(new Product(2, "Apple Juice", 249));
+        using var owner = await factory.CreateAuthenticatedClientAsync("owner@example.com");
+        using var intruder = await factory.CreateAuthenticatedClientAsync("intruder@example.com");
+
+        using var createResponse = await owner.PostAsync("/api/carts", null);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var location = createResponse.Headers.Location;
+        Assert.NotNull(location);
+        var itemUrl = $"{location}/items/2";
+
+        using var ownerSet = await owner.PutAsJsonAsync(itemUrl, new SetCartItemRequest(3));
+        Assert.Equal(HttpStatusCode.NoContent, ownerSet.StatusCode);
+
+        // Act
+        using var get = await intruder.GetAsync(location);
+        using var set = await intruder.PutAsJsonAsync(itemUrl, new SetCartItemRequest(1));
+        using var increment = await intruder.PostAsync($"{itemUrl}/increment", null);
+        using var decrement = await intruder.PostAsync($"{itemUrl}/decrement", null);
+        using var remove = await intruder.DeleteAsync(itemUrl);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        foreach (var response in new[] { set, increment, decrement, remove })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            var error = await response.Content.ReadFromJsonAsync<ApiError>();
+            Assert.NotNull(error);
+            Assert.Equal("Cart not found.", error.Error);
+        }
+
+        using var ownerGet = await owner.GetAsync(location);
+        Assert.Equal(HttpStatusCode.OK, ownerGet.StatusCode);
+        var cart = await ownerGet.Content.ReadFromJsonAsync<CartResponse>();
+        Assert.NotNull(cart);
+        var item = Assert.Single(cart.Items);
+        Assert.Equal(3, item.Quantity);
     }
 }

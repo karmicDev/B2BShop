@@ -40,5 +40,10 @@ public class ShopDbContext : IdentityDbContext<ApplicationUser>
             {
                 address.OwnsOne(a => a.Location);
             });
+        modelBuilder.Entity<Cart>()
+            .HasOne(cart => cart.User)
+            .WithMany()
+            .HasForeignKey(cart => cart.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
