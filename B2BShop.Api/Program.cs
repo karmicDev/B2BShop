@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using B2BShop.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using B2BShop.Api.Contracts;
@@ -80,14 +81,25 @@ app.MapGet("/api/carts/{id:guid}", async (Guid id, CartService service) =>
 
 });
 
-app.MapPost("/api/carts", async (CartService service) =>
-{
-    var cartId = await service.CreateAsync();
+app.MapPost("/api/carts", async (
+        CartService service,
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager) =>
+    {
+        var userId = userManager.GetUserId(principal);
 
-    return Results.Created(
-        $"/api/carts/{cartId}",
-        new { id = cartId });
-});
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var cartId = await service.CreateAsync(userId);
+
+        return Results.Created(
+            $"/api/carts/{cartId}",
+            new { id = cartId });
+    })
+    .RequireAuthorization();
 
 app.MapPut("/api/carts/{cartId:guid}/items/{productId:int}",
     async (

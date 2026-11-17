@@ -14,9 +14,9 @@ public class CartService
         _dbContext = dbContext;
     }
 
-    public async Task<Guid> CreateAsync()
+    public async Task<Guid> CreateAsync(string userId)
     {
-        var cart = new Cart();
+        var cart = new Cart { UserId = userId };
         _dbContext.Carts.Add(cart);
         await _dbContext.SaveChangesAsync();
         return cart.Id;
