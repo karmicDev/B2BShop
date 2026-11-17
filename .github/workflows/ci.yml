@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore B2BShop.slnx
+
+      - name: Build
+        run: dotnet build B2BShop.slnx --no-restore --configuration Release
+
+      - name: Check for missing EF Core migrations
+        working-directory: B2BShop.Api
+        env:
+          # Dummy value: the check only compares the model with the migrations and never connects
+          ConnectionStrings__ShopDatabase: Host=localhost;Database=ci;Username=ci;Password=ci
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes
+
+      - name: Run tests (unit + PostgreSQL integration via Testcontainers)
+        run: dotnet test B2BShop.Api.Tests --no-build --configuration Release --verbosity normal

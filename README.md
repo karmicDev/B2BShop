@@ -1,5 +1,7 @@
 # B2BShop
 
+[![CI](https://github.com/karmicDev/B2BShop/actions/workflows/ci.yml/badge.svg)](https://github.com/karmicDev/B2BShop/actions/workflows/ci.yml)
+
 REST API for an ordering platform, built with **C#, ASP.NET Core, Entity Framework Core and PostgreSQL**. It started as a B2B shop and is evolving into a restaurant ordering platform. It is a personal learning project, developed in small steps with conventional commits.
 
 The backend comes first. Client apps (SwiftUI iOS, then web and Android) are planned and not part of the repository yet.
@@ -23,6 +25,7 @@ The backend comes first. Client apps (SwiftUI iOS, then web and Android) are pla
 | Authentication | ASP.NET Core Identity |
 | Testing | xUnit, WebApplicationFactory, Testcontainers |
 | Local environment | Docker Compose, .NET User Secrets |
+| CI | GitHub Actions: build, migration check, all tests on every push and pull request |
 
 ## Status
 
