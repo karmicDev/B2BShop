@@ -22,13 +22,13 @@ public class CartService
         return cart.Id;
     }
 
-    public async Task<CartResponse?> GetByIdAsync(Guid id)
+    public async Task<CartResponse?> GetByIdAsync(Guid id, string userId)
     {
         var cart = await _dbContext.Carts
             .AsNoTracking()
             .Include(cart => cart.Items)
             .ThenInclude(item => item.Product)
-            .FirstOrDefaultAsync(cart => cart.Id == id);
+            .FirstOrDefaultAsync(cart => cart.Id == id && cart.UserId == userId);
 
         if (cart is null)
         {
@@ -49,6 +49,7 @@ public class CartService
 
     public Task<SetCartItemResult> SetItemAsync(
         Guid cartId,
+        string userId,
         int productId,
         int quantity)
     {
@@ -57,23 +58,26 @@ public class CartService
             return Task.FromResult(SetCartItemResult.InvalidQuantity);
         }
 
-        return ChangeQuantityAsync(cartId, productId, _ => quantity);
+        return ChangeQuantityAsync(cartId, userId, productId, _ => quantity);
     }
 
     public Task<SetCartItemResult> IncrementItemAsync(
         Guid cartId,
+        string userId,
         int productId)
     {
         return ChangeQuantityAsync(
-            cartId, productId, currentQuantity => currentQuantity + 1);
+            cartId, userId, productId, currentQuantity => currentQuantity + 1);
     }
 
     public Task<SetCartItemResult> DecrementItemAsync(
         Guid cartId,
+        string userId,
         int productId)
     {
         return ChangeQuantityAsync(
-            cartId, 
+            cartId,
+            userId,
             productId, 
             currentQuantity => currentQuantity - 1,
             removeWhenEmpty: true);
@@ -81,10 +85,12 @@ public class CartService
 
     public Task<SetCartItemResult> RemoveItemAsync(
         Guid cartId,
+        string userId,
         int productId)
     {
         return ChangeQuantityAsync(
             cartId,
+            userId,
             productId,
             _ => 0,
             removeWhenEmpty: true);
@@ -92,11 +98,12 @@ public class CartService
 
     private async Task<SetCartItemResult> ChangeQuantityAsync(
         Guid  cartId,
+        string userId,
         int productId,
         Func<int, int> calculateQuantity,
         bool removeWhenEmpty = false)
     {
-        if (!await _dbContext.Carts.AnyAsync(cart => cart.Id == cartId))
+        if (!await _dbContext.Carts.AnyAsync(cart => cart.Id == cartId && cart.UserId == userId))
         {
             return SetCartItemResult.CartNotFound;
         }

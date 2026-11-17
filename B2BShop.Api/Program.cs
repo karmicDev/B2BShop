@@ -69,17 +69,27 @@ app.MapGet("/api/products/{id:int}", async (int id, ProductService service) =>
     return Results.Ok(product);
 });
 
-app.MapGet("/api/carts/{id:guid}", async (Guid id, CartService service) =>
+app.MapGet("/api/carts/{id:guid}", async (
+    Guid id,
+    CartService service,
+    ClaimsPrincipal principal,
+    UserManager<ApplicationUser> userManager) =>
 {
-    var cartId = await service.GetByIdAsync(id);
-    if (cartId is null)
+    var userId = userManager.GetUserId(principal);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+    
+    var cart = await service.GetByIdAsync(id, userId);
+    if (cart is null)
     {
         return Results.NotFound();
     }
 
-    return Results.Ok(cartId);
-
-});
+    return Results.Ok(cart);
+})
+.RequireAuthorization();
 
 app.MapPost("/api/carts", async (
         CartService service,
@@ -87,7 +97,6 @@ app.MapPost("/api/carts", async (
         UserManager<ApplicationUser> userManager) =>
     {
         var userId = userManager.GetUserId(principal);
-
         if (userId is null)
         {
             return Results.Unauthorized();
@@ -106,10 +115,18 @@ app.MapPut("/api/carts/{cartId:guid}/items/{productId:int}",
         Guid cartId,
         int productId,
         SetCartItemRequest request,
-        CartService service) =>
+        CartService service,
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager) =>
     {
+        var userId = userManager.GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
         var result = await service.SetItemAsync(
-            cartId, productId, request.Quantity);
+            cartId, userId, productId, request.Quantity);
 
         return result switch
         {
@@ -124,15 +141,24 @@ app.MapPut("/api/carts/{cartId:guid}/items/{productId:int}",
                 Results.Conflict(new { error = "The cart is busy. Please retry the request." }),
             _ => Results.StatusCode(500)
         };
-    });
+    })
+    .RequireAuthorization();
 
 app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/increment",
     async (
         Guid cartId,
         int productId,
-        CartService cartService) =>
+        CartService cartService,
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager) =>
     {
-        var result = await cartService.IncrementItemAsync(cartId, productId);
+        var userId = userManager.GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await cartService.IncrementItemAsync(cartId, userId, productId);
         return result switch
         {
             SetCartItemResult.Success =>
@@ -158,15 +184,24 @@ app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/increment",
 
             _ => Results.StatusCode(500)
         };
-    });
+    })
+    .RequireAuthorization();
 
 app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/decrement",
     async (
         Guid cartId,
         int productId,
-        CartService cartService) =>
+        CartService cartService,
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager) =>
     {
-        var result = await cartService.DecrementItemAsync(cartId, productId);
+        var userId = userManager.GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await cartService.DecrementItemAsync(cartId, userId, productId);
         return result switch
         {
             SetCartItemResult.Success =>
@@ -192,15 +227,24 @@ app.MapPost("/api/carts/{cartId:guid}/items/{productId:int}/decrement",
 
             _ => Results.StatusCode(500)
         };
-    });
+    })
+    .RequireAuthorization();
 
 app.MapDelete("/api/carts/{cartId:guid}/items/{productId:int}",
     async (
         Guid cartId,
         int productId,
-        CartService service) =>
+        CartService service,
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager) =>
     {
-        var result = await service.RemoveItemAsync(cartId, productId);
+        var userId = userManager.GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await service.RemoveItemAsync(cartId, userId, productId);
 
         return result switch
         {
@@ -217,6 +261,7 @@ app.MapDelete("/api/carts/{cartId:guid}/items/{productId:int}",
 
             _ => Results.StatusCode(500)
         };
-    });
+    })
+    .RequireAuthorization();
 
 app.Run();

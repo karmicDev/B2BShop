@@ -1,5 +1,6 @@
 using B2BShop.Api.Data;
 using B2BShop.Api.Models;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +49,28 @@ public class ShopApiFactory : WebApplicationFactory<Program>
 
         context.Products.AddRange(products);
         await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Registers a user and returns a client that is logged in with a cookie.
+    /// Call <see cref="InitializeDatabaseAsync"/> first so the schema exists.
+    /// </summary>
+    public async Task<HttpClient> CreateAuthenticatedClientAsync(
+        string email = "buyer@example.com",
+        string password = "Learning-Shop-42!")
+    {
+        var client = CreateClient();
+        var credentials = new { email, password };
+
+        using var registerResponse = await client.PostAsJsonAsync(
+            "/api/auth/register", credentials);
+        registerResponse.EnsureSuccessStatusCode();
+
+        using var loginResponse = await client.PostAsJsonAsync(
+            "/api/auth/login?useCookies=true", credentials);
+        loginResponse.EnsureSuccessStatusCode();
+
+        return client;
     }
 
     public override async ValueTask DisposeAsync()
