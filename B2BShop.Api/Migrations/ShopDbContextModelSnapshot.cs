@@ -147,8 +147,9 @@ namespace B2BShop.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("PlaceType")
-                        .HasColumnType("integer");
+                    b.Property<string>("PlaceType")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
